@@ -46,7 +46,7 @@ jobs:
 
   build-site:
     name: "build docs"
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
       - name: "Checkout repository 🛎"
         uses: actions/checkout@v4
@@ -67,7 +67,7 @@ jobs:
           uv run sphinx-build docs docs/_build -W
 
   run-pyright:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - name: Install uv

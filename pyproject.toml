@@ -1,0 +1,72 @@
+[project]
+name = "transfertmarche"
+version = "0.1.0"
+description = ""
+authors = [{name = "Bilèl Benammar"}, {name = "Adrien Quéneudec"}]
+requires-python = ">=3.10, <3.14"
+readme = "README.md"
+dependencies = [
+    "pandas[parquet]>=2,<3",
+    "nicegui[native]>=2,<3",
+    "pyside6"
+]
+
+
+[project.scripts]
+main_ng = "tfmc.main_nicegui:run"
+main_qt = "tfmc.main_qt:run"
+
+[dependency-groups]
+test = [
+    "pytest>=8.3.3,<9",
+    "pandas-stubs>=2.2.3.250527,<3",
+    "pytest-sugar>=1.0.0,<2",
+    "ipykernel>=6.29.0,<7",
+    "ipywidgets>=8.0.3,<9",
+    "pytest-xdist>=3.6.1,<4",
+    "coverage>=7.11.0",
+]
+docs = [
+    "Sphinx>=8.0.0,<9",
+    "pydata-sphinx-theme>=0.16.0,<0.17",
+    "myst-parser>=4.0.0,<5",
+    "jupyter>=1.0.0,<2",
+    "nbsphinx>=0.9.3,<0.10",
+    "sphinx-copybutton>=0.5.2,<0.6",
+    "sphinx-autobuild>=2024.0.0,<2025",
+    "ipython>=8.15.0,<9",
+    "sphinx-favicon>=1.0.1,<2",
+    "sphinx-argparse>=0.5.0,<0.6",
+]
+
+[tool.uv]
+default-groups = [
+    "test",
+    "docs",
+]
+
+[tool.hatch.build.targets.sdist]
+include = ["tfmc"]
+
+[tool.hatch.build.targets.wheel]
+include = ["tfmc"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pydoclint]
+style = 'google'
+arg-type-hints-in-docstring = false
+skip-checking-raises = true
+allow-init-docstring = true
+check-return-types = false
+check-yield-types = false
+
+[tool.pytest.ini_options]
+doctest_optionflags = ["NORMALIZE_WHITESPACE", "ELLIPSIS"]
+addopts = "--import-mode=importlib --doctest-modules"
+testpaths = ["test_tfmc", "tfmc"]
+
+[tool.coverage.run]
+source = ["tfmc"]

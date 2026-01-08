@@ -8,13 +8,14 @@ readme = "README.md"
 dependencies = [
     "pandas[parquet]>=2,<3",
     "nicegui[native]>=2,<3",
-    "pyside6"
+    "matplotlib>=3.10.8",
+    "pyqt5-qt5==5.15.2",
+    "pyqt5>=5.15.11",
 ]
 
 
 [project.scripts]
-main_ng = "tfmc.main_nicegui:run"
-main_qt = "tfmc.main_qt:run"
+main = "tfmc.main:run"
 
 [dependency-groups]
 test = [

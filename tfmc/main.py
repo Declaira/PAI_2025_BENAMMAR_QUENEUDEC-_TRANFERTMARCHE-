@@ -279,9 +279,9 @@ class DataManager:
     def load_data(self) -> bool:
         """Charge les fichiers CSV nécessaires à l'application."""
         try:
-            self.df_clubs_season = pd.read_csv("clubs_par_saisons.csv")
-            self.df_clubs_profile = pd.read_csv("clubs_profile.csv")
-            self.df_joueurs = pd.read_csv("joueurs.csv")
+            self.df_clubs_season = pd.read_csv("data/clubs_par_saisons.csv")
+            self.df_clubs_profile = pd.read_csv("data/clubs_profile.csv")
+            self.df_joueurs = pd.read_csv("data/joueurs.csv")
 
             # Calcul de l'âge centralisé
             def calculate_age_display(dob: Any) -> str:
@@ -1177,6 +1177,7 @@ class ClubPage(BasePage):
         bars = ax.bar(bpd["Saison"], bpd["Buts"], color="#ffa45f")
         ax.bar_label(bars, padding=3, fontsize=9, fontweight="bold")
         ax.set_title(f"Évolution des buts :", color="#1a3150", fontweight="bold")
+        ax.set_xlabel('Saisons')
         ax.set_ylabel("Nombre total de buts")
         ax.tick_params(axis="x", rotation=90)
         fig.tight_layout()
@@ -1341,8 +1342,22 @@ class PlayerPage(BasePage):
         super().__init__(main_window)
         self.title = QLabel("Joueur")
         self.title.setObjectName("page_title")
-        self.layout.addWidget(self.title)
+        
+        # --- EN-TÊTE AVEC BOUTON ---
+        header_layout = QHBoxLayout()
+        header_layout.addWidget(self.title)
+        header_layout.addStretch()
+        
+        self.btn_stats_graph = QPushButton("📊 Buts / Passes D.")
+        self.btn_stats_graph.setCheckable(True)
+        self.btn_stats_graph.setCursor(Qt.PointingHandCursor)
+        self.btn_stats_graph.setStyleSheet("padding: 5px; font-weight: bold;")
+        self.btn_stats_graph.clicked.connect(self.toggle_graph)
+        header_layout.addWidget(self.btn_stats_graph)
+        
+        self.layout.addLayout(header_layout)
 
+        # --- CARTES DE STATS ---
         stats_box = QHBoxLayout()
         self.card_goals = self.create_stat_card("Buts", "0")
         self.card_assists = self.create_stat_card("Passes D.", "0")
@@ -1357,6 +1372,10 @@ class PlayerPage(BasePage):
         self.layout.addLayout(stats_box)
 
         self.layout.addWidget(QLabel("<b>Historique & Stats par saison :</b>"))
+
+        # --- CONTENU PRINCIPAL (Tableau + Graphique) ---
+        self.content_layout = QHBoxLayout()
+        
         self.table_hist = QTableWidget()
         self.table_hist.setColumnCount(4)
         self.table_hist.setMouseTracking(True)
@@ -1366,7 +1385,13 @@ class PlayerPage(BasePage):
         )
         self.table_hist.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.table_hist.cellClicked.connect(self.on_club_click)
-        self.layout.addWidget(self.table_hist)
+        
+        self.content_layout.addWidget(self.table_hist, stretch=2)
+        
+        # Canvas pour le graphique (initialisé à None)
+        self.canvas: Optional[FigureCanvas] = None
+        
+        self.layout.addLayout(self.content_layout)
 
     def create_stat_card(self, label: str, value: str) -> QVBoxLayout:
         l = QVBoxLayout()
@@ -1380,14 +1405,22 @@ class PlayerPage(BasePage):
 
     def load(self, player_name: str) -> None:
         self.title.setText(f"⚽ {player_name}")
+        
+        # Réinitialiser le graphique à chaque changement de joueur
+        self.btn_stats_graph.setChecked(False)
+        self.remove_canvas()
+
         df = self.mw.dm.players_stats_parsed
         player_data = df[df["name"] == player_name].sort_values(
             "season", ascending=False
         )
+        
+        # Mise à jour des cartes
         total_g = player_data["goals"].sum()
         total_a = player_data["assists"].sum()
         self.card_goals.itemAt(0).widget().setText(str(total_g))
         self.card_assists.itemAt(0).widget().setText(str(total_a))
+        
         raw_value = (
             player_data["market_value"].iloc[0] if not player_data.empty else 0
         )
@@ -1398,10 +1431,12 @@ class PlayerPage(BasePage):
                 display_value = f"{raw_value/1000000:.1f}M €"
             else:
                 display_value = f"{raw_value/1000:.0f}K €"
+                
         poste = player_data["position"].iloc[0] if not player_data.empty else "-"
         self.card_position.itemAt(0).widget().setText(poste)
         self.card_value.itemAt(0).widget().setText(display_value)
 
+        # Remplissage du tableau
         self.table_hist.setRowCount(len(player_data))
         for i, (_, row) in enumerate(player_data.iterrows()):
             self.table_hist.setItem(i, 0, QTableWidgetItem(row["season"]))
@@ -1411,6 +1446,70 @@ class PlayerPage(BasePage):
             self.table_hist.setItem(i, 1, item_club)
             self.table_hist.setItem(i, 2, QTableWidgetItem(str(row["goals"])))
             self.table_hist.setItem(i, 3, QTableWidgetItem(str(row["assists"])))
+
+    def toggle_graph(self) -> None:
+        """Affiche ou masque le graphique d'évolution."""
+        if self.btn_stats_graph.isChecked():
+            player_name = self.title.text().replace("⚽ ", "")
+            fig = self.get_stats_evolution_fig(player_name)
+            if fig:
+                self.canvas = FigureCanvas(fig)
+                self.canvas.setMinimumWidth(400)
+                self.content_layout.addWidget(self.canvas, stretch=1)
+                self.canvas.show()
+            else:
+                # Si pas de données, on décoche
+                self.btn_stats_graph.setChecked(False)
+        else:
+            self.remove_canvas()
+
+    def remove_canvas(self) -> None:
+        if self.canvas:
+            self.content_layout.removeWidget(self.canvas)
+            self.canvas.deleteLater()
+            self.canvas = None
+
+    def get_stats_evolution_fig(self, player_name: str) -> Optional[Figure]:
+        import numpy as np # Import local nécessaire pour les positions des barres
+        
+        df = self.mw.dm.players_stats_parsed
+        # On trie par saison croissante pour le graphique (chronologique)
+        data = df[df["name"] == player_name].sort_values("season", ascending=True)
+
+        if data.empty:
+            return None
+
+        seasons = data["season"].apply(lambda x: f"{x[2:4]}/{x[7:9]}").tolist()
+        goals = data["goals"].tolist()
+        assists = data["assists"].tolist()
+
+        x = np.arange(len(seasons))  # Positions des étiquettes
+        width = 0.35  # Largeur des barres
+
+        fig = Figure(figsize=(5, 4), dpi=100)
+        fig.patch.set_facecolor(COLOR_BG) # Fond gris clair harmonisé
+        ax = fig.add_subplot(111)
+
+        # Création des deux barres
+        rects1 = ax.bar(x - width/2, goals, width, label='Buts', color=COLOR_MAIN)
+        rects2 = ax.bar(x + width/2, assists, width, label='Passes D.', color=COLOR_SIDEBAR)
+
+        # Ajout des labels
+        ax.set_xlabel('Saisons')
+        ax.set_title(f'Évolution Buts & Passes D.', color=COLOR_SIDEBAR, fontweight="bold")
+        ax.set_xticks(x)
+        ax.set_xticklabels(seasons, rotation=90)
+        ax.legend()
+        
+        # Ajout des valeurs au-dessus des barres
+        ax.bar_label(rects1, padding=3)
+        ax.bar_label(rects2, padding=3)
+
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        
+        fig.tight_layout()
+        return fig
 
     def on_club_click(self, row: int, col: int) -> None:
         if col == 1:
@@ -1719,11 +1818,13 @@ class MainWindow(QMainWindow):
             self.history_stack.append(next_state)
             self.navigate_to(next_state[0], next_state[1], from_history=True)
 
-
-if __name__ == "__main__":
+def run():
     app = QApplication(sys.argv)
     font = QFont("Segoe UI", 10)
     app.setFont(font)
     win = MainWindow()
     win.show()
     sys.exit(app.exec_())
+
+if __name__ == "__main__":
+    run()

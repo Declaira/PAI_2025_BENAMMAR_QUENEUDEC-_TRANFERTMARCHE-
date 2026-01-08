@@ -32,7 +32,7 @@ from PyQt5.QtWidgets import (
     QDialogButtonBox,
 )
 from PyQt5.QtCore import Qt, QModelIndex, QEvent
-from PyQt5.QtGui import QFont, QPixmap, QImage, QColor
+from PyQt5.QtGui import QFont, QPixmap, QImage, QColor, QIcon
 
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
@@ -709,6 +709,30 @@ class AsyncImageLabel(QLabel):
                 self.setText("Erreur IMG")
         except Exception:
             self.setText("N/A")
+    
+    def set_image_from_path(self, file_path: str) -> None:
+        """Charge une image depuis un chemin local (ex: C:/images/logo.png)."""
+        self.setAlignment(Qt.AlignCenter)
+
+        # 1. Vérifier si le chemin est vide ou invalide (NaN)
+        if not file_path or (pd.isna(file_path)):
+            self.setText("Pas de chemin")
+            return
+
+        # 2. Charger l'image dans un QPixmap
+        pixmap = QPixmap(file_path)
+
+        # 3. Vérifier si le chargement a réussi (si c'est bien une image)
+        if not pixmap.isNull():
+            # Redimensionnement identique à la méthode URL
+            scaled_pixmap = pixmap.scaled(
+                self.size(), 
+                Qt.KeepAspectRatio, 
+                Qt.SmoothTransformation
+            )
+            self.setPixmap(scaled_pixmap)
+        else:
+            self.setText("Format invalide")
 
 
 class HoverDelegate(QStyledItemDelegate):
@@ -1422,6 +1446,7 @@ class MainWindow(QMainWindow):
     def init_ui(self) -> None:
         self.resize(1280, 800)
         self.setWindowTitle("TransfertMarché")
+        self.setWindowIcon(QIcon("logo.png"))
         self.setStyleSheet(STYLE_SHEET)
 
         central = QWidget()
@@ -1624,7 +1649,7 @@ class MainWindow(QMainWindow):
         try:
             if type_hint == "home":
                 self.stack.setCurrentIndex(0)
-                self.img_label.setText("🏠")
+                self.img_label.set_image_from_path("logo.png")
                 self.lbl_side_info.setText("ACCUEIL")
 
             elif type_hint == "championnat":

@@ -2,14 +2,13 @@ import os
 import pandas as pd
 import requests
 import numpy as np
-import kagglehub
 from typing import Optional, Dict, Any
 from datetime import datetime
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QComboBox, QLineEdit, QDialogButtonBox,
                              QFormLayout, QSpinBox, QDialog, QTabWidget)
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap
-from config import COUNTRY_DATA, DATA_PATH, POSITIONS_FR
+from tfmc.config import COUNTRY_DATA, DATA_PATH, POSITIONS_FR
 
 # --- GESTION DES DONNÉES ---
 class DataManager:
@@ -74,24 +73,8 @@ class DataManager:
             pass
         
         return None
-    
-    def prepare_local_data(self):
-        if not os.path.exists(DATA_PATH):
-            os.makedirs(DATA_PATH)
-            print("Téléchargement des données Kaggle...")
-            try:
-                cache_path = kagglehub.dataset_download("davidcariboo/player-scores")
-                files = ['clubs.csv', 'players.csv', 'games.csv', 'appearances.csv', 'transfers.csv']
-                for f in files:
-                    src = os.path.join(cache_path, f)
-                    if os.path.exists(src):
-                        shutil.copy(src, os.path.join(DATA_PATH, f))
-            except Exception as e:
-                print(f"Erreur téléchargement: {e}")
 
     def load_data(self):
-        self.prepare_local_data()
-
         try:
             self.df_clubs = pd.read_csv(os.path.join(DATA_PATH, "clubs.csv"))
             self.df_players = pd.read_csv(os.path.join(DATA_PATH, "players.csv"))

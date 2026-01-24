@@ -22,10 +22,10 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
 
-from data_manager import DataManager, FilterDialog
-from graph_dashboard import GraphDashboard
-from config import STYLE_SHEET, BASE_DIR, AsyncImageLabel
-from page import (
+from tfmc.data_manager import DataManager, FilterDialog
+from tfmc.graph_dashboard import GraphDashboard
+from tfmc.config import STYLE_SHEET, BASE_DIR, AsyncImageLabel
+from tfmc.page import (
     HomePage,
     LeaguePage,
     CupPage,

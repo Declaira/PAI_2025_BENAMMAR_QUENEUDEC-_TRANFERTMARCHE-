@@ -22,10 +22,10 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QTimer
 
-from config import COLOR_MAIN, COLOR_BG, COLOR_SIDEBAR
+from tfmc.config import COLOR_MAIN, COLOR_BG, COLOR_SIDEBAR
 
 if TYPE_CHECKING:
-    from main_window import MainWindow
+    from tfmc.main_window import MainWindow
 
 
 class GraphDashboard(QWidget):

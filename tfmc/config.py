@@ -128,7 +128,7 @@ COUNTRY_DATA: Dict[str, Dict[str, str]] = {
     "Senegal": {"fr": "Sénégal", "code": "sn"},
     "Cape Verde": {"fr": "Cap-Vert", "code": "cv"},
     "Morocco": {"fr": "Maroc", "code": "ma"},
-    "Lybia": {"fr": "Lybie", "code": "ly"},
+    "Libya": {"fr": "Libye", "code": "ly"},
     "Egypt": {"fr": "Egypte", "code": "eg"},
     "Ivory Coast": {"fr": "Cote d'Ivoire", "code": "ci"},
     "Mali": {"fr": "Mali", "code": "ml"},

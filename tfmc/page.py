@@ -28,11 +28,11 @@ from PyQt5.QtCore import Qt, QEvent
 from PyQt5.QtGui import QFont, QPixmap, QColor, QPen, QBrush, QPainter, QWheelEvent
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from config import BASE_DIR, COLOR_MAIN, COLOR_LINK
+from tfmc.config import BASE_DIR, COLOR_MAIN, COLOR_LINK
 
 # Pour éviter les imports circulaires si MainWindow est défini ailleurs
 if TYPE_CHECKING:
-    from main import MainWindow
+    from tfmc.main import MainWindow
 
 
 def format_season_display(year: Any, short: bool = False) -> str:

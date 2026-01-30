@@ -4,8 +4,8 @@ import numpy as np
 from unittest.mock import MagicMock, patch
 
 # Import des fonctions et classes à tester
-from page import format_season_display, parse_season_from_display
-from data_manager import DataManager
+from tfmc.page import format_season_display, parse_season_from_display
+from tfmc.data_manager import DataManager
 
 # --- TESTS UNITAIRES : page.py ---
 

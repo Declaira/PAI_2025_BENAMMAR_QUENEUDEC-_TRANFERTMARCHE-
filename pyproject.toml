@@ -9,7 +9,7 @@ dependencies = [
     "pandas[parquet]>=2,<3",
     "nicegui[native]>=2,<3",
     "matplotlib>=3.10.8",
-    "pyqt5-qt5==5.15.2",
+    "pyqt5-qt5>=5.15.2",
     "pyqt5>=5.15.11",
 ]
 

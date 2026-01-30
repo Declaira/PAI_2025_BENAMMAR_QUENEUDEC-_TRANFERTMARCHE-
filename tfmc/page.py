@@ -1,5 +1,5 @@
 import os
-from typing import Optional, Any, Tuple, List, Dict, TYPE_CHECKING
+from typing import Optional, Any, Tuple, List, Dict, TYPE_CHECKING, cast
 
 import pandas as pd
 from PyQt5.QtWidgets import (
@@ -22,29 +22,32 @@ from PyQt5.QtWidgets import (
     QScrollArea,
     QTreeWidget,
     QTreeWidgetItem,
-    QGraphicsPixmapItem
+    QGraphicsPixmapItem,
+    QGraphicsProxyWidget
 )
-from PyQt5.QtCore import Qt, QEvent
-from PyQt5.QtGui import QFont, QPixmap, QColor, QPen, QBrush, QPainter, QWheelEvent
+# Import explicite des Enums pour satisfaire Pyright
+from PyQt5.QtCore import Qt, QEvent, QRectF
+from PyQt5.QtGui import (
+    QFont, 
+    QPixmap, 
+    QColor, 
+    QPen, 
+    QBrush, 
+    QPainter, 
+    QWheelEvent
+)
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from tfmc.config import BASE_DIR, COLOR_MAIN, COLOR_LINK
 
 # Pour éviter les imports circulaires si MainWindow est défini ailleurs
 if TYPE_CHECKING:
-    from tfmc.main import MainWindow
+    from tfmc.main_window import MainWindow
 
 
 def format_season_display(year: Any, short: bool = False) -> str:
     """
     Transforme une année (ex: 2024) en format de saison.
-
-    Args:
-        year (Any): L'année de début.
-        short (bool): Si True, renvoie '24-25', sinon '2024-2025'.
-
-    Returns:
-        str: La chaîne formatée de la saison.
     """
     try:
         y = int(year)
@@ -57,13 +60,7 @@ def format_season_display(year: Any, short: bool = False) -> str:
 
 def parse_season_from_display(display_str: str) -> int:
     """
-    Récupère l'année de départ depuis une chaîne formatée (ex: '2024-2025' -> 2024).
-
-    Args:
-        display_str (str): La chaîne affichée dans l'interface.
-
-    Returns:
-        int: L'année de début (par défaut 2024 en cas d'erreur).
+    Récupère l'année de départ depuis une chaîne formatée.
     """
     try:
         return int(display_str.split("-")[0])
@@ -73,19 +70,14 @@ def parse_season_from_display(display_str: str) -> int:
 
 def create_flag_label(mw: "MainWindow", country_name: str) -> QLabel:
     """
-    Crée un QLabel contenant le drapeau d'un pays via le cache de MainWindow.
-
-    Args:
-        mw (MainWindow): Référence à la fenêtre principale pour l'accès aux données.
-        country_name (str): Nom du pays.
-
-    Returns:
-        QLabel: Le label contenant l'image ou le texte du pays.
+    Crée un QLabel contenant le drapeau d'un pays.
     """
     label = QLabel()
-    label.setAlignment(Qt.AlignCenter)
+    # Correction Enum
+    label.setAlignment(Qt.AlignmentFlag.AlignCenter)
     label.setObjectName("label")
-    # get_flag_pixmap s'occupe maintenant de traduire "Espagne" -> "es"
+    
+    # On suppose que mw.dm a bien la méthode get_flag_pixmap
     pixmap = mw.dm.get_flag_pixmap(country_name)
 
     if pixmap:
@@ -123,7 +115,8 @@ class MatchDetailDialog(QDialog):
 
         for i, (_, row) in enumerate(stats.iterrows()):
             it = QTableWidgetItem(str(row["name"]))
-            it.setData(Qt.UserRole, row["player_id"])
+            # Correction Enum
+            it.setData(Qt.ItemDataRole.UserRole, row["player_id"])
             it.setForeground(QColor(COLOR_LINK))
             self.table.setItem(i, 0, it)
             self.table.setItem(i, 1, QTableWidgetItem(str(row["position"])))
@@ -133,16 +126,20 @@ class MatchDetailDialog(QDialog):
                 i, 4, QTableWidgetItem(str(int(row["minutes_played"])))
             )
 
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        # Correction Enum
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.cellClicked.connect(self.on_click)
         layout.addWidget(self.table)
 
     def on_click(self, r: int, c: int) -> None:
         """Gère le clic sur le nom d'un joueur pour naviguer vers sa page."""
         if c == 0:
-            pid = self.table.item(r, 0).data(Qt.UserRole)
-            self.nav(pid, "joueur")
-            self.close()
+            item = self.table.item(r, 0)
+            if item:
+                # Correction Enum
+                pid = item.data(Qt.ItemDataRole.UserRole)
+                self.nav(pid, "joueur")
+                self.close()
 
 
 # --- PAGES ---
@@ -154,8 +151,8 @@ class BasePage(QWidget):
     def __init__(self, mw: "MainWindow") -> None:
         super().__init__()
         self.mw = mw
-        self.layout = QVBoxLayout(self)
-        self.layout.setContentsMargins(20, 20, 20, 20)
+        self.layout_main = QVBoxLayout(self) # Renommé pour éviter conflit nom
+        self.layout_main.setContentsMargins(20, 20, 20, 20)
 
 
 class HomePage(BasePage):
@@ -168,59 +165,39 @@ class HomePage(BasePage):
         self.scene = QGraphicsScene()
         self.view = QGraphicsView(self.scene)
         self.view.setObjectName("view")
-        self.view.setRenderHint(QPainter.Antialiasing)
-        self.view.setDragMode(QGraphicsView.ScrollHandDrag)
+        # Correction Enums
+        self.view.setRenderHint(QPainter.RenderHint.Antialiasing)
+        self.view.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
         map_width, map_height = 960, 735
         self.scene.setSceneRect(0, 0, map_width, map_height)
 
         # --- CHARGEMENT CARTE ---
         self.map_item = QGraphicsPixmapItem()
-        image_path = BASE_DIR+"/europe_map.png"
+        image_path = BASE_DIR + "/europe_map.png"
         if os.path.exists(image_path):
             pixmap = QPixmap(image_path)
             if not pixmap.isNull():
                 pixmap = pixmap.scaled(
                     map_width,
                     map_height,
-                    Qt.KeepAspectRatio,
-                    Qt.SmoothTransformation,
+                    # Correction Enums
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
                 )
                 self.map_item.setPixmap(pixmap)
-                # Optionnel: rendre la carte légèrement transparente pour le style
                 self.map_item.setOpacity(0.8)
                 self.scene.addItem(self.map_item)
 
         # 2. COORDONNÉES
-        coords = {
-            # --- ÎLES BRITANNIQUES ---
-            "GB1": (300, 420),  # Angleterre
-            "SC1": (305, 340),  # Ecosse
-            # --- EUROPE DE L'OUEST ---
-            "FR1": (350, 500),  # France
-            "BE1": (375, 460),  # Belgique
-            "NL1": (370, 430),  # Pays-Bas
-            "L1": (430, 450),  # Allemagne
-            # --- PÉNINSULE IBÉRIQUE ---
-            "ES1": (250, 620),  # Espagne
-            "PO1": (185, 625),  # Portugal
-            # --- ITALIE & SUD ---
-            "IT1": (450, 600),  # Italie
-            "GR1": (600, 650),  # Grèce
-            "TR1": (750, 600),  # Turquie
-            # --- NORD & EST ---
-            "DK1": (430, 370),  # Danemark
-            "RU1": (800, 230),  # Russie
-            "UKR1": (700, 440),  # Ukraine
-            # --- DANS LA MER (GAUCHE) ---
-            "CL": (80, 280),  # Champions League
-            "EL": (80, 375),  # Europa League
-            # --- COUPES NATIONALES (Proches des pays) ---
-            "CDR": (280, 620),  # Copa del Rey
-            "FAC": (330, 420),  # FA Cup
-            "DFB": (460, 450),  # DFB Pokal
-            "CIT": (480, 600),  # Coppa Italia
-            "NLP": (400, 430),  # KNVB Beker,
-            "GRP": (630, 650),  # Kypello Elladas
+        coords: Dict[str, Tuple[int, int]] = {
+            "GB1": (300, 420), "SC1": (305, 340), "FR1": (350, 500),
+            "BE1": (375, 460), "NL1": (370, 430), "L1": (430, 450),
+            "ES1": (250, 620), "PO1": (185, 625), "IT1": (450, 600),
+            "GR1": (600, 650), "TR1": (750, 600), "DK1": (430, 370),
+            "RU1": (800, 230), "UKR1": (700, 440), "CL": (80, 280),
+            "EL": (80, 375), "CDR": (280, 620), "FAC": (330, 420),
+            "DFB": (460, 450), "CIT": (480, 600), "NLP": (400, 430),
+            "GRP": (630, 650),
         }
 
         # 3. CRÉATION DES POINTS
@@ -228,69 +205,48 @@ class HomePage(BasePage):
             if code not in coords:
                 continue
             x, y = coords[code]
-            btn = MapPoint(name, code, mw, self.scene, x, y)
+            btn = MapPoint(name, code, mw, self.scene, float(x), float(y))
             is_championship = "1" in code
             style = "outline: none; border-radius: 15px; font-weight: bold; "
 
-            # --- COUPE D'EUROPE ---
             if code in ["CL", "EL"]:
                 symbol = "🌟" if code == "CL" else "✨"
                 border_color = "#f1c40f"
                 btn.setText(symbol)
-                btn.setStyleSheet(
-                    f"""
+                btn.setStyleSheet(f"""
                     QPushButton {{
-                        {style}
-                        background-color: #003399;
-                        border: 2px solid {border_color};
-                        color: white;
-                        font-size: 16px;
+                        {style} background-color: #003399; border: 2px solid {border_color};
+                        color: white; font-size: 16px;
                     }}
-                    QPushButton:hover {{
-                        background-color: #0044cc;
-                    }}
-                """
-                )
-
-            # --- COUPES NATIONALES ---
+                    QPushButton:hover {{ background-color: #0044cc; }}
+                """)
             elif not is_championship:
                 btn.setText("🏆")
-                btn.setStyleSheet(
-                    f"""
+                btn.setStyleSheet(f"""
                     QPushButton {{
-                        {style}
-                        background-color: #95a5a6;
-                        border: 2px solid white;
-                        color: white;
-                        font-size: 14px;
+                        {style} background-color: #95a5a6; border: 2px solid white;
+                        color: white; font-size: 14px;
                     }}
-                    QPushButton:hover {{
-                        background-color: #bdc3c7;
-                    }}
-                """
-                )
-
-            # --- CHAMPIONNATS ---
+                    QPushButton:hover {{ background-color: #bdc3c7; }}
+                """)
             else:
                 btn.setText("")
-                btn.setStyleSheet(
-                    f"""
+                btn.setStyleSheet(f"""
                     QPushButton {{
                         outline: none; border-radius: 15px; font-weight: bold;
-                        background-color: {COLOR_MAIN};
-                        border: 2px solid white;
+                        background-color: {COLOR_MAIN}; border: 2px solid white;
                     }}
                     QPushButton:hover {{
-                        background-color: white;
-                        border: 2px solid {COLOR_MAIN};
+                        background-color: white; border: 2px solid {COLOR_MAIN};
                     }}
-                """
-                )
+                """)
 
             proxy = self.scene.addWidget(btn)
-            proxy.setZValue(5)
-            proxy.setPos(x - 15, y - 15)
-        self.layout.addWidget(self.view)
+            if isinstance(proxy, QGraphicsProxyWidget):
+                 proxy.setZValue(5)
+                 proxy.setPos(float(x) - 15, float(y) - 15)
+        
+        self.layout_main.addWidget(self.view)
 
 
 class MapPoint(QPushButton):
@@ -310,16 +266,20 @@ class MapPoint(QPushButton):
         self.code = code
         self.mw = mw
         self.setFixedSize(30, 30)
-        self.setCursor(Qt.PointingHandCursor)
+        # Correction Enum
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFlat(True)
-        self.setAttribute(Qt.WA_TranslucentBackground)
+        # Correction Enum
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
         # Création du label
         self.label_item = parent_scene.addText(name)
-        self.label_item.setFont(QFont("Segoe UI", 9, QFont.Bold))
+        self.label_item.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
         self.label_item.setDefaultTextColor(QColor("#ffffff"))
+        
+        # Correction Enum pour NoPen
         self.bg_item = parent_scene.addRect(
-            self.label_item.boundingRect(), QPen(Qt.NoPen), QBrush(QColor(0, 0, 0, 180))
+            self.label_item.boundingRect(), QPen(Qt.PenStyle.NoPen), QBrush(QColor(0, 0, 0, 180))
         )
 
         # Positionnement
@@ -363,17 +323,18 @@ class LeaguePage(BasePage):
         top.addStretch()
         top.addWidget(QLabel("Saison:"))
         top.addWidget(self.combo)
-        self.layout.addLayout(top)
+        self.layout_main.addLayout(top)
 
         self.table = QTableWidget()
         self.table.setColumnCount(6)
         self.table.setHorizontalHeaderLabels(
             ["Pos", "Club", "Pts", "BP", "BC", "Diff"]
         )
-        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)  # Empêche l'édition
+        # Correction Enums
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.cellClicked.connect(self.on_click)
-        self.layout.addWidget(self.table)
+        self.layout_main.addWidget(self.table)
         self.lid: Optional[str] = None
 
     def load(self, lid: str) -> None:
@@ -384,10 +345,18 @@ class LeaguePage(BasePage):
 
     def update(self) -> None:
         """Met à jour le tableau en fonction de la saison sélectionnée."""
+        if self.lid is None:
+            return
+            
         s_text = self.combo.currentText()
         if not s_text:
             return
         s = parse_season_from_display(s_text)
+        
+        # Sécurité DataFrames
+        if self.mw.dm.df_games is None:
+            return
+
         df = self.mw.dm.df_games[
             (self.mw.dm.df_games["competition_id"] == self.lid)
             & (self.mw.dm.df_games["season"] == s)
@@ -431,7 +400,8 @@ class LeaguePage(BasePage):
 
             # Nom du club
             it = QTableWidgetItem(str(row["name"]))
-            it.setData(Qt.UserRole, row["id"])
+            # Correction Enum
+            it.setData(Qt.ItemDataRole.UserRole, row["id"])
             it.setForeground(QColor(COLOR_LINK))
             self.table.setItem(i, 1, it)
 
@@ -447,7 +417,8 @@ class LeaguePage(BasePage):
         if c == 1:
             item = self.table.item(r, 1)
             if item:
-                cid = item.data(Qt.UserRole)
+                # Correction Enum
+                cid = item.data(Qt.ItemDataRole.UserRole)
                 self.mw.navigate_to(cid, "club")
 
 
@@ -462,15 +433,14 @@ class CupBracketWidget(QGraphicsView):
         self.mw = mw
 
         # --- CONFIGURATION ZOOM & PAN ---
-        self.setRenderHint(QPainter.Antialiasing)
-        self.setRenderHint(QPainter.SmoothPixmapTransform)
-        self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
-        self.setResizeAnchor(QGraphicsView.AnchorUnderMouse)
-        self.setDragMode(
-            QGraphicsView.ScrollHandDrag
-        )  # Active le déplacement au clic-glissé
-        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        # Correction Enums
+        self.setRenderHint(QPainter.RenderHint.Antialiasing)
+        self.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
+        self.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
+        self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
         self.box_w = 180
         self.box_h = 70
@@ -492,9 +462,6 @@ class CupBracketWidget(QGraphicsView):
     def draw_bracket(self, bracket_data: List[List[Dict[str, Any]]]) -> None:
         """
         Dessine l'arbre complet du tournoi.
-
-        Args:
-            bracket_data: Liste de listes de matchs (ex: [Huitièmes, Quarts, Demies...]).
         """
         self.scene.clear()
         self.resetTransform()
@@ -518,7 +485,7 @@ class CupBracketWidget(QGraphicsView):
                     else:
                         y = row * (self.box_h + self.dy) * (2**col)
 
-                self.draw_match_box(x, y, m_info)
+                self.draw_match_box(float(x), float(y), m_info)
                 current_level_nodes.append((x, y))
 
                 if col > 0 and (row * 2 + 1) < len(prev_level_nodes):
@@ -527,22 +494,24 @@ class CupBracketWidget(QGraphicsView):
                     child2_y = prev_level_nodes[row * 2 + 1][1] + self.box_h / 2
                     mid_x = child1_x + self.dx / 2
                     pen = QPen(QColor("#cbd5e0"), 2)
-                    self.scene.addLine(child1_x, child1_y, mid_x, child1_y, pen)
-                    self.scene.addLine(child1_x, child2_y, mid_x, child2_y, pen)
-                    self.scene.addLine(mid_x, child1_y, mid_x, child2_y, pen)
-                    self.scene.addLine(mid_x, y + self.box_h / 2, x, y + self.box_h / 2, pen)
+                    self.scene.addLine(float(child1_x), float(child1_y), float(mid_x), float(child1_y), pen)
+                    self.scene.addLine(float(child1_x), float(child2_y), float(mid_x), float(child2_y), pen)
+                    self.scene.addLine(float(mid_x), float(child1_y), float(mid_x), float(child2_y), pen)
+                    self.scene.addLine(float(mid_x), float(y + self.box_h / 2), float(x), float(y + self.box_h / 2), pen)
 
             prev_level_nodes = current_level_nodes
 
         rect = self.scene.itemsBoundingRect().adjusted(-100, -100, 100, 100)
         self.setSceneRect(rect)
-        self.fitInView(rect, Qt.KeepAspectRatio)
+        # Correction Enum
+        self.fitInView(rect, Qt.AspectRatioMode.KeepAspectRatio)
 
     def draw_match_box(self, x: float, y: float, m: Dict[str, Any]) -> None:
         """Dessine une boîte individuelle pour un match."""
         # Fond de la boîte
+        # Correction Enum
         self.scene.addRect(
-            x, y, self.box_w, self.box_h, QPen(QColor("#cbd5e0")), QBrush(Qt.white)
+            x, y, self.box_w, self.box_h, QPen(QColor("#cbd5e0")), QBrush(Qt.GlobalColor.white)
         )
 
         # Couleurs
@@ -579,7 +548,8 @@ class CupBracketWidget(QGraphicsView):
             f"QPushButton {{ color: {color1}; background: transparent; border: none; font-weight: bold; text-align: left; padding: 0px; }} "
             f"QPushButton:hover {{ color: {blue_link}; text-decoration: underline; }}"
         )
-        btn1.setCursor(Qt.PointingHandCursor)
+        # Correction Enum
+        btn1.setCursor(Qt.CursorShape.PointingHandCursor)
         btn1.setFixedWidth(int(self.box_w - 10))
         btn1.clicked.connect(lambda: self.mw.navigate_to(m.get("t1_id"), "club"))
 
@@ -593,7 +563,8 @@ class CupBracketWidget(QGraphicsView):
             f"QPushButton {{ color: {color2}; background: transparent; border: none; font-weight: bold; text-align: left; padding: 0px; }} "
             f"QPushButton:hover {{ color: {blue_link}; text-decoration: underline; }}"
         )
-        btn2.setCursor(Qt.PointingHandCursor)
+        # Correction Enum
+        btn2.setCursor(Qt.CursorShape.PointingHandCursor)
         btn2.setFixedWidth(int(self.box_w - 10))
         btn2.clicked.connect(lambda: self.mw.navigate_to(m.get("t2_id"), "club"))
 
@@ -602,7 +573,7 @@ class CupBracketWidget(QGraphicsView):
 
         # --- AFFICHAGE DES SCORES ---
         if is_double:
-            # Aller (Score du match 1)
+            # Aller
             aller_txt = self.scene.addText(
                 f"{m.get('s1_1_raw', 0)}-{m.get('s1_2_raw', 0)}"
             )
@@ -610,15 +581,14 @@ class CupBracketWidget(QGraphicsView):
             aller_txt.setDefaultTextColor(gray)
             aller_txt.setFont(QFont("Segoe UI", 8))
 
-            # TOTAL (Cumulé)
+            # TOTAL
             total_txt = self.scene.addText(f"{s1_total}-{s2_total}")
             total_txt.setPos(x + (self.box_w / 2) - 18, y + 22)
-            total_txt.setFont(QFont("Segoe UI", 9, QFont.Bold))
-            # Si gagné aux buts à l'extérieur
+            total_txt.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
             if s1_total == s2_total and winner != 0:
                 total_txt.setDefaultTextColor(QColor(blue_link))
 
-            # Retour (Score du match 2)
+            # Retour
             retour_txt = self.scene.addText(f"{m.get('s2_1', 0)}-{m.get('s2_2', 0)}")
             retour_txt.setPos(x + self.box_w - 45, y + 22)
             retour_txt.setDefaultTextColor(gray)
@@ -627,7 +597,7 @@ class CupBracketWidget(QGraphicsView):
             # Match unique
             st = self.scene.addText(f"{s1_total} - {s2_total}")
             st.setPos(x + (self.box_w / 2) - 20, y + 22)
-            st.setFont(QFont("Segoe UI", 9, QFont.Bold))
+            st.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
             st.setDefaultTextColor(QColor("#1a3150"))
 
 
@@ -652,8 +622,9 @@ class MatchDetailsDialog(QDialog):
 
         self.table = QTableWidget(0, 4)
         self.table.setHorizontalHeaderLabels(["Date", "Match", "Score", "Action"])
-        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-        self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        # Correction Enums
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
 
         for _, m in matches_df.sort_values("date", ascending=False).iterrows():
             row = self.table.rowCount()
@@ -677,7 +648,7 @@ class MatchDetailsDialog(QDialog):
             btn = QPushButton("Stats")
             btn.clicked.connect(
                 lambda chk, gid=m["game_id"]: MatchDetailDialog(
-                    gid, self.mw.dm, self.mw.navigate_to
+                    int(gid), self.mw.dm, self.mw.navigate_to
                 ).exec_()
             )
             self.table.setCellWidget(row, 3, btn)
@@ -702,10 +673,10 @@ class CupPage(BasePage):
         top.addStretch()
         top.addWidget(QLabel("Saison :"))
         top.addWidget(self.combo_season)
-        self.layout.addLayout(top)
+        self.layout_main.addLayout(top)
 
         self.tabs = QTabWidget()
-        self.layout.addWidget(self.tabs)
+        self.layout_main.addWidget(self.tabs)
 
         # --- Onglet Phase de Groupes ---
         self.scroll_groups = QScrollArea()
@@ -749,16 +720,21 @@ class CupPage(BasePage):
     def on_group_click(self, row: int, col: int) -> None:
         """Gère le clic sur un club dans les tableaux de groupes."""
         if col == 1:
+            # Sécurité Pyright : table typé dynamiquement par sender()
             table = self.sender()
-            item = table.item(row, col)
-            club_id = item.data(Qt.UserRole)
-            if club_id:
-                self.mw.navigate_to(club_id, "club")
+            if isinstance(table, QTableWidget):
+                item = table.item(row, col)
+                if item:
+                    # Correction Enum
+                    club_id = item.data(Qt.ItemDataRole.UserRole)
+                    if club_id:
+                        self.mw.navigate_to(club_id, "club")
 
     def on_tree_click(self, item: QTreeWidgetItem, col: int) -> None:
         """Gère le clic sur un club dans la liste de phase finale."""
         if col in [0, 4]:
-            club_id = item.data(col, Qt.UserRole)
+            # Correction Enum
+            club_id = item.data(col, Qt.ItemDataRole.UserRole)
             if club_id:
                 self.mw.navigate_to(club_id, "club")
 
@@ -766,6 +742,10 @@ class CupPage(BasePage):
         """Charge une compétition spécifique."""
         self.lid = lid
         self.title.setText(self.mw.dm.leagues.get(lid, lid))
+
+        # Sécurité DataFrames
+        if self.mw.dm.df_games is None:
+            return
 
         self.combo_season.blockSignals(True)
         self.combo_season.clear()
@@ -777,10 +757,13 @@ class CupPage(BasePage):
         s_text = self.combo_season.currentText()
         s_val = parse_season_from_display(s_text) if s_text else None
 
-        has_groups = not df_comp[
-            (df_comp["season"] == s_val)
-            & (df_comp["round"].str.contains("Group", case=False, na=False))
-        ].empty
+        # Vérification si on a des groupes
+        has_groups = False
+        if s_val is not None:
+             has_groups = not df_comp[
+                (df_comp["season"] == s_val)
+                & (df_comp["round"].str.contains("Group", case=False, na=False))
+            ].empty
 
         if not has_groups:
             self.tabs.setTabVisible(0, False)
@@ -794,7 +777,7 @@ class CupPage(BasePage):
     def update(self) -> None:
         """Met à jour les données affichées selon la saison."""
         s_text = self.combo_season.currentText()
-        if not s_text:
+        if not s_text or self.lid is None or self.mw.dm.df_games is None:
             return
         s = parse_season_from_display(s_text)
 
@@ -811,8 +794,9 @@ class CupPage(BasePage):
     def build_groups(self, df: pd.DataFrame) -> None:
         """Construit les tableaux pour la phase de groupes."""
         for i in reversed(range(self.group_lay.count())):
-            if self.group_lay.itemAt(i).widget():
-                self.group_lay.itemAt(i).widget().setParent(None)
+            item = self.group_lay.itemAt(i)
+            if item and item.widget():
+                item.widget().setParent(None)
 
         g_df = df[df["round"].str.contains("Group", case=False, na=False)]
         if g_df.empty:
@@ -865,8 +849,9 @@ class CupPage(BasePage):
             t.setHorizontalHeaderLabels(
                 ["Pos", "Club", "Pts", "MJ", "Diff", "Détails"]
             )
-            t.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-            t.setEditTriggers(QAbstractItemView.NoEditTriggers)
+            # Correction Enum
+            t.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+            t.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
             t.cellClicked.connect(self.on_group_click)
 
             sorted_teams = sorted(
@@ -882,7 +867,8 @@ class CupPage(BasePage):
 
                 short_name = self.mw.dm.get_club_name(tid, short=True)
                 item_name = QTableWidgetItem(short_name)
-                item_name.setData(Qt.UserRole, tid)
+                # Correction Enum
+                item_name.setData(Qt.ItemDataRole.UserRole, tid)
                 item_name.setForeground(QColor("#3498db"))
                 t.setItem(row, 1, item_name)
 
@@ -974,8 +960,9 @@ class CupPage(BasePage):
                 t1_short = self.mw.dm.get_club_name(hid, short=True)
                 t2_short = self.mw.dm.get_club_name(aid, short=True)
 
-                child.setData(0, Qt.UserRole, hid)
-                child.setData(4, Qt.UserRole, aid)
+                # Correction Enum
+                child.setData(0, Qt.ItemDataRole.UserRole, hid)
+                child.setData(4, Qt.ItemDataRole.UserRole, aid)
 
                 winner = 0
 
@@ -1044,13 +1031,14 @@ class CupPage(BasePage):
                 child.setForeground(
                     0,
                     QBrush(
-                        green if winner == 1 else (red if winner == 2 else Qt.black)
+                        # Correction Enum
+                        green if winner == 1 else (red if winner == 2 else Qt.GlobalColor.black)
                     ),
                 )
                 child.setForeground(
                     4,
                     QBrush(
-                        green if winner == 2 else (red if winner == 1 else Qt.black)
+                        green if winner == 2 else (red if winner == 1 else Qt.GlobalColor.black)
                     ),
                 )
 
@@ -1080,7 +1068,7 @@ class ClubPage(BasePage):
         top.addStretch()
         top.addWidget(QLabel("Saison:"))
         top.addWidget(self.combo)
-        self.layout.addLayout(top)
+        self.layout_main.addLayout(top)
 
         self.content_lay = QHBoxLayout()
 
@@ -1099,13 +1087,18 @@ class ClubPage(BasePage):
         self.tabs.addTab(self.tab_mercato, "Mercato")
 
         self.content_lay.addWidget(self.tabs, stretch=3)
-        self.layout.addLayout(self.content_lay)
+        self.layout_main.addLayout(self.content_lay)
         self.cid: Optional[int] = None
         self.chart_view: Optional[Any] = None
 
     def load(self, cid: int) -> None:
         """Charge les données d'un club donné."""
         self.cid = cid
+        
+        # Sécurité DF
+        if self.mw.dm.df_clubs is None:
+            return
+
         c_info = self.mw.dm.df_clubs[self.mw.dm.df_clubs["club_id"] == cid].iloc[0]
         self.title.setText(c_info["name"])
         if self.chart_view:
@@ -1115,11 +1108,18 @@ class ClubPage(BasePage):
 
     def update(self) -> None:
         """Met à jour les onglets selon la saison sélectionnée."""
+        if self.cid is None:
+            return
+
         s_text = self.combo.currentText()
         if not s_text:
             return
         s = parse_season_from_display(s_text)
         cid = self.cid
+        
+        # Sécurité DataFrames
+        if self.mw.dm.df_appearances is None or self.mw.dm.df_games is None or self.mw.dm.df_players is None:
+            return
 
         # 1. SQUAD
         apps = self.mw.dm.df_appearances.merge(
@@ -1135,12 +1135,14 @@ class ClubPage(BasePage):
         self.tab_squad.setHorizontalHeaderLabels(
             ["Nom", "Âge", "Poste", "Valeur", "Nat."]
         )
-        self.tab_squad.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        # Correction Enum
+        self.tab_squad.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
 
         for i, (_, p) in enumerate(squad.iterrows()):
             # Colonne 0 : Nom
             it = QTableWidgetItem(str(p["name"]))
-            it.setData(Qt.UserRole, p["player_id"])
+            # Correction Enum
+            it.setData(Qt.ItemDataRole.UserRole, p["player_id"])
             it.setForeground(QColor(COLOR_LINK))
             self.tab_squad.setItem(i, 0, it)
 
@@ -1148,13 +1150,15 @@ class ClubPage(BasePage):
             age = p["age"]
             age_val = f"{int(age)} ans" if pd.notna(age) else "-"
             age_item = QTableWidgetItem(age_val)
-            age_item.setTextAlignment(Qt.AlignCenter)
+            # Correction Enum
+            age_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.tab_squad.setItem(i, 1, age_item)
 
             # Colonne 2 : Poste
             poste_val = str(p.get("sub_position", "-"))
             poste_item = QTableWidgetItem(poste_val)
-            poste_item.setTextAlignment(Qt.AlignCenter)
+            # Correction Enum
+            poste_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.tab_squad.setItem(i, 2, poste_item)
 
             # Colonne 3 : Valeur Marchande
@@ -1164,7 +1168,8 @@ class ClubPage(BasePage):
                 else "-"
             )
             v_item = QTableWidgetItem(v)
-            v_item.setTextAlignment(Qt.AlignCenter)
+            # Correction Enum
+            v_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.tab_squad.setItem(i, 3, v_item)
 
             # Colonne 4 : Nationalité/Drapeau
@@ -1192,7 +1197,8 @@ class ClubPage(BasePage):
             a_name = self.mw.dm.get_club_name(g["away_club_id"], short=True)
 
             h_it = QTableWidgetItem(h_name)
-            h_it.setData(Qt.UserRole, g["home_club_id"])
+            # Correction Enum
+            h_it.setData(Qt.ItemDataRole.UserRole, g["home_club_id"])
             h_it.setForeground(QColor(COLOR_LINK))
             self.tab_matches.setItem(i, 1, h_it)
 
@@ -1205,7 +1211,8 @@ class ClubPage(BasePage):
             )
 
             a_it = QTableWidgetItem(a_name)
-            a_it.setData(Qt.UserRole, g["away_club_id"])
+            # Correction Enum
+            a_it.setData(Qt.ItemDataRole.UserRole, g["away_club_id"])
             a_it.setForeground(QColor(COLOR_LINK))
             self.tab_matches.setItem(i, 3, a_it)
 
@@ -1218,6 +1225,10 @@ class ClubPage(BasePage):
             self.tab_matches.setCellWidget(i, 4, btn)
 
         # 3. MERCATO
+        # Sécurité Transfers
+        if self.mw.dm.df_transfers is None:
+            return
+
         tr = self.mw.dm.df_transfers[
             (
                 (self.mw.dm.df_transfers["from_club_id"] == cid)
@@ -1233,7 +1244,8 @@ class ClubPage(BasePage):
 
         for i, (_, t) in enumerate(tr.iterrows()):
             it = QTableWidgetItem(str(t["player_name"]))
-            it.setData(Qt.UserRole, t["player_id"])
+            # Correction Enum
+            it.setData(Qt.ItemDataRole.UserRole, t["player_id"])
             it.setForeground(QColor(COLOR_LINK))
             self.tab_mercato.setItem(i, 0, it)
 
@@ -1246,7 +1258,8 @@ class ClubPage(BasePage):
             other = str(t["from_club_name"]) if is_arr else str(t["to_club_name"])
             oid = t["from_club_id"] if is_arr else t["to_club_id"]
             oit = QTableWidgetItem(other)
-            oit.setData(Qt.UserRole, oid)
+            # Correction Enum
+            oit.setData(Qt.ItemDataRole.UserRole, oid)
             oit.setForeground(QColor(COLOR_LINK))
             self.tab_mercato.setItem(i, 2, oit)
 
@@ -1259,17 +1272,31 @@ class ClubPage(BasePage):
 
     def on_squad_click(self, r: int, c: int) -> None:
         if c == 0:
-            self.mw.navigate_to(self.tab_squad.item(r, 0).data(Qt.UserRole), "joueur")
+            item = self.tab_squad.item(r, 0)
+            if item:
+                # Correction Enum
+                pid = item.data(Qt.ItemDataRole.UserRole)
+                self.mw.navigate_to(pid, "joueur")
 
     def on_match_click(self, r: int, c: int) -> None:
         if c in [1, 3]:
-            self.mw.navigate_to(self.tab_matches.item(r, c).data(Qt.UserRole), "club")
+            item = self.tab_matches.item(r, c)
+            if item:
+                # Correction Enum
+                cid = item.data(Qt.ItemDataRole.UserRole)
+                self.mw.navigate_to(cid, "club")
 
     def on_mercato_click(self, r: int, c: int) -> None:
         if c == 0:
-            self.mw.navigate_to(self.tab_mercato.item(r, 0).data(Qt.UserRole), "joueur")
+            item = self.tab_mercato.item(r, 0)
+            if item:
+                pid = item.data(Qt.ItemDataRole.UserRole)
+                self.mw.navigate_to(pid, "joueur")
         if c == 2:
-            self.mw.navigate_to(self.tab_mercato.item(r, 2).data(Qt.UserRole), "club")
+            item = self.tab_mercato.item(r, 2)
+            if item:
+                cid = item.data(Qt.ItemDataRole.UserRole)
+                self.mw.navigate_to(cid, "club")
 
 
 class PlayerPage(BasePage):
@@ -1286,7 +1313,7 @@ class PlayerPage(BasePage):
         header_layout.addWidget(self.title)
         header_layout.addStretch()
 
-        self.layout.addLayout(header_layout)
+        self.layout_main.addLayout(header_layout)
 
         # --- CARTES DE STATS ---
         stats_box = QHBoxLayout()
@@ -1304,9 +1331,9 @@ class PlayerPage(BasePage):
         stats_box.addSpacing(20)
         stats_box.addLayout(self.card_pos_lay)
 
-        self.layout.addLayout(stats_box)
+        self.layout_main.addLayout(stats_box)
 
-        self.layout.addWidget(QLabel("<b>Historique & Stats par saison :</b>"))
+        self.layout_main.addWidget(QLabel("<b>Historique & Stats par saison :</b>"))
 
         # --- CONTENU PRINCIPAL ---
         self.content_layout = QHBoxLayout()
@@ -1318,14 +1345,15 @@ class PlayerPage(BasePage):
         self.table.setHorizontalHeaderLabels(
             ["Saison", "Club", "Buts", "Passes", "Min"]
         )
-        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        # Correction Enum
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.table.cellClicked.connect(self.on_click)
 
         self.content_layout.addWidget(self.table, stretch=2)
 
         # Canvas pour le graphique interne
         self.canvas: Optional[FigureCanvas] = None
-        self.layout.addLayout(self.content_layout)
+        self.layout_main.addLayout(self.content_layout)
 
     def create_stat_card(self, label: str, value: str) -> Tuple[QVBoxLayout, QLabel]:
         """Crée une carte de stat et retourne le layout ET le label de valeur pour mise à jour ultérieure."""
@@ -1336,17 +1364,24 @@ class PlayerPage(BasePage):
         lbl_lbl = QLabel(label.upper())
         lbl_lbl.setObjectName("lbl_lbl")
 
-        l.addWidget(val_lbl, alignment=Qt.AlignCenter)
-        l.addWidget(lbl_lbl, alignment=Qt.AlignCenter)
+        # Correction Enum
+        l.addWidget(val_lbl, alignment=Qt.AlignmentFlag.AlignCenter)
+        l.addWidget(lbl_lbl, alignment=Qt.AlignmentFlag.AlignCenter)
         return l, val_lbl
 
     def load(self, pid: int) -> None:
         """Charge les données d'un joueur."""
         self.pid = pid
+        
+        if self.mw.dm.df_players is None:
+            return
+
         # 1. Récupération des infos générales du joueur
-        p_info = self.mw.dm.df_players[self.mw.dm.df_players["player_id"] == pid].iloc[
-            0
-        ]
+        p_row = self.mw.dm.df_players[self.mw.dm.df_players["player_id"] == pid]
+        if p_row.empty:
+            return
+            
+        p_info = p_row.iloc[0]
 
         # Mise à jour du titre principal
         pos = p_info.get("sub_position", "-")
@@ -1364,6 +1399,10 @@ class PlayerPage(BasePage):
         self.card_v.setText(val_display)
 
         # --- LOGIQUE DE STATISTIQUES ---
+        # Sécurité DFs
+        if self.mw.dm.df_appearances is None or self.mw.dm.df_games is None or self.mw.dm.df_clubs is None:
+             return
+
         apps = self.mw.dm.df_appearances[self.mw.dm.df_appearances["player_id"] == pid]
 
         if not apps.empty:
@@ -1392,7 +1431,8 @@ class PlayerPage(BasePage):
             for i, (_, row) in enumerate(agg.iterrows()):
                 self.table.setItem(i, 0, QTableWidgetItem(f"{int(row['season'])}"))
                 c_it = QTableWidgetItem(str(row["name"]))
-                c_it.setData(Qt.UserRole, row["club_id"])
+                # Correction Enum
+                c_it.setData(Qt.ItemDataRole.UserRole, row["club_id"])
                 c_it.setForeground(QColor(COLOR_LINK))  # Ou COLOR_LINK si défini
                 self.table.setItem(i, 1, c_it)
                 self.table.setItem(i, 2, QTableWidgetItem(str(int(row["goals"]))))
@@ -1408,7 +1448,11 @@ class PlayerPage(BasePage):
 
     def on_click(self, r: int, c: int) -> None:
         if c == 1:
-            self.mw.navigate_to(self.table.item(r, 1).data(Qt.UserRole), "club")
+            item = self.table.item(r, 1)
+            if item:
+                # Correction Enum
+                cid = item.data(Qt.ItemDataRole.UserRole)
+                self.mw.navigate_to(cid, "club")
 
 
 class SuggestionPage(BasePage):
@@ -1417,10 +1461,10 @@ class SuggestionPage(BasePage):
     def __init__(self, mw: "MainWindow") -> None:
         super().__init__(mw)
         self.title = QLabel("Résultats", objectName="page_title")
-        self.layout.addWidget(self.title)
+        self.layout_main.addWidget(self.title)
         self.table = QTableWidget()
         self.table.cellClicked.connect(self.on_click)
-        self.layout.addWidget(self.table)
+        self.layout_main.addWidget(self.table)
         self.mode = "joueur"
 
     def load_players(self, df: pd.DataFrame) -> None:
@@ -1430,10 +1474,12 @@ class SuggestionPage(BasePage):
         self.table.setColumnCount(5)
         self.table.setHorizontalHeaderLabels(["Nom", "Age", "Poste", "Valeur", "Nat."])
         self.table.setRowCount(len(df))
-        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        # Correction Enum
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         for i, (_, r) in enumerate(df.iterrows()):
             it = QTableWidgetItem(str(r["name"]))
-            it.setData(Qt.UserRole, r["player_id"])
+            # Correction Enum
+            it.setData(Qt.ItemDataRole.UserRole, r["player_id"])
             it.setForeground(QColor(COLOR_LINK))
             self.table.setItem(i, 0, it)
 
@@ -1463,10 +1509,12 @@ class SuggestionPage(BasePage):
         self.table.setColumnCount(2)
         self.table.setHorizontalHeaderLabels(["Nom", "Stade"])
         self.table.setRowCount(len(df))
-        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        # Correction Enum
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         for i, (_, r) in enumerate(df.iterrows()):
             it = QTableWidgetItem(str(r["name"]))
-            it.setData(Qt.UserRole, r["club_id"])
+            # Correction Enum
+            it.setData(Qt.ItemDataRole.UserRole, r["club_id"])
             it.setForeground(QColor(COLOR_LINK))
             self.table.setItem(i, 0, it)
             self.table.setItem(
@@ -1475,5 +1523,8 @@ class SuggestionPage(BasePage):
 
     def on_click(self, r: int, c: int) -> None:
         if c == 0:
-            uid = self.table.item(r, 0).data(Qt.UserRole)
-            self.mw.navigate_to(uid, self.mode)
+            item = self.table.item(r, 0)
+            if item:
+                # Correction Enum
+                uid = item.data(Qt.ItemDataRole.UserRole)
+                self.mw.navigate_to(uid, self.mode)

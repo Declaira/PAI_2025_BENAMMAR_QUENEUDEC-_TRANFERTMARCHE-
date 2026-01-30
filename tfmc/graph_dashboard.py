@@ -1,13 +1,15 @@
 import pandas as pd
 import numpy as np
 from datetime import date
-from typing import Optional, Any, Dict, TYPE_CHECKING
+from typing import Optional, Any, Dict, TYPE_CHECKING, List, cast
 
+# Matplotlib
 from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.axes import Axes
 
+# PyQt5
 from PyQt5.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -42,7 +44,7 @@ class GraphDashboard(QWidget):
         self.dm = main_window.dm
         self.current_inputs: Dict[str, Any] = {}
 
-        self.layout = QVBoxLayout(self)
+        self.layout_main = QVBoxLayout(self) # Renommé pour éviter conflit avec méthode layout()
         self.setObjectName("graph_dashboard")
 
         # --- ZONE DE CONTRÔLE (Haut) ---
@@ -55,7 +57,8 @@ class GraphDashboard(QWidget):
         self.btn_add.setToolTip("Ajouter un graphique de comparaison à gauche")
         self.btn_add.setFixedSize(30, 30)
         self.btn_add.setObjectName("btn_add")
-        self.btn_add.setCursor(Qt.PointingHandCursor)
+        # Correction Enum
+        self.btn_add.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_add.clicked.connect(self.add_comparison_graph)
         self.grid.addWidget(self.btn_add, 0, 0)
 
@@ -64,7 +67,8 @@ class GraphDashboard(QWidget):
         self.btn_remove.setToolTip("Fermer ce graphique")
         self.btn_remove.setFixedSize(30, 30)
         self.btn_remove.setObjectName("btn_remove")
-        self.btn_remove.setCursor(Qt.PointingHandCursor)
+        # Correction Enum
+        self.btn_remove.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_remove.clicked.connect(self.remove_dashboard)
         self.grid.addWidget(self.btn_remove, 0, 1)
 
@@ -84,17 +88,20 @@ class GraphDashboard(QWidget):
         # 3. Bouton Update
         self.btn_update = QPushButton("Générer Graphique 📊")
         self.btn_update.setObjectName("action_btn")
-        self.btn_update.setCursor(Qt.PointingHandCursor)
+        # Correction Enum
+        self.btn_update.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_update.clicked.connect(self.plot)
         self.grid.addWidget(self.btn_update, 2, 0, 1, 4)
 
-        self.layout.addWidget(self.controls)
+        self.layout_main.addWidget(self.controls)
 
         # --- ZONE GRAPHIQUE (Bas) ---
         self.figure = Figure(figsize=(5, 5), dpi=100)
-        self.figure.patch.set_facecolor(COLOR_BG)  # Fond global
-        self.canvas = FigureCanvas(self.figure)
-        self.layout.addWidget(self.canvas)
+        if hasattr(self.figure, "patch"):
+             self.figure.patch.set_facecolor(COLOR_BG)  # type: ignore
+        
+        self.canvas = FigureCanvas(self.figure) # type: ignore
+        self.layout_main.addWidget(self.canvas)
 
         self.on_mode_changed()
         QTimer.singleShot(10, self.update_buttons_state)
@@ -105,7 +112,9 @@ class GraphDashboard(QWidget):
         self.mw.splitter.addWidget(new_dash)
         new_dash.show()
         # Masquer le contenu principal pour laisser place aux graphs
-        self.mw.splitter.widget(0).hide()
+        widget_zero = self.mw.splitter.widget(0)
+        if widget_zero:
+            widget_zero.hide()
 
         total_w = self.mw.splitter.width()
         # Répartition équitable de l'espace
@@ -132,26 +141,30 @@ class GraphDashboard(QWidget):
         ]
 
         total_w = self.mw.splitter.width()
+        widget_zero = self.mw.splitter.widget(0)
 
         if len(dashboards) == 1:
             # --- RETOUR AU MODE CÔTÉ À CÔTÉ (Contenu + 1 Graph) ---
-            self.mw.splitter.widget(0).show()
+            if widget_zero:
+                widget_zero.show()
             self.mw.splitter.setSizes([int(total_w * 0.5), int(total_w * 0.5)])
             dashboards[0].update_buttons_state()
 
         elif len(dashboards) == 0:
             # Plus de graphiques, on affiche le contenu en plein écran
-            self.mw.splitter.widget(0).show()
+            if widget_zero:
+                widget_zero.show()
             self.mw.splitter.setSizes([total_w])
             self.mw.btn_graph.setChecked(False)
 
     def update_buttons_state(self) -> None:
         """Met à jour l'activation des boutons (+) et (-) selon le nombre de widgets graphiques."""
         main_splitter = self.parent()
+        # Navigation sécurisée vers le parent QSplitter
         while main_splitter and not isinstance(main_splitter, QSplitter):
             main_splitter = main_splitter.parent()
 
-        if main_splitter:
+        if isinstance(main_splitter, QSplitter):
             dashboards = [
                 main_splitter.widget(i)
                 for i in range(main_splitter.count())
@@ -159,46 +172,43 @@ class GraphDashboard(QWidget):
             ]
             count = len(dashboards)
             for db in dashboards:
-                # --- Bouton AJOUT (+) ---
-                if count >= 2:
-                    db.btn_add.setEnabled(False)
-                    db.btn_add.setStyleSheet(
-                        "background-color: #bdc3c7; color: white; border-radius: 4px;"
-                    )
-                else:
-                    db.btn_add.setEnabled(True)
-                    db.btn_add.setStyleSheet(
-                        "background-color: #27ae60; color: white; border-radius: 4px; font-weight: bold;"
-                    )
+                if isinstance(db, GraphDashboard): # Double check pour le typage
+                    # --- Bouton AJOUT (+) ---
+                    if count >= 2:
+                        db.btn_add.setEnabled(False)
+                        db.btn_add.setStyleSheet(
+                            "background-color: #bdc3c7; color: white; border-radius: 4px;"
+                        )
+                    else:
+                        db.btn_add.setEnabled(True)
+                        db.btn_add.setStyleSheet(
+                            "background-color: #27ae60; color: white; border-radius: 4px; font-weight: bold;"
+                        )
 
-                # --- Bouton FERMER (-) ---
-                if count <= 1:
-                    db.btn_remove.setEnabled(False)
-                    db.btn_remove.setStyleSheet(
-                        "background-color: #bdc3c7; color: white; border-radius: 4px;"
-                    )
-                else:
-                    db.btn_remove.setEnabled(True)
-                    db.btn_remove.setStyleSheet(
-                        "background-color: #e74c3c; color: white; border-radius: 4px; font-weight: bold;"
-                    )
+                    # --- Bouton FERMER (-) ---
+                    if count <= 1:
+                        db.btn_remove.setEnabled(False)
+                        db.btn_remove.setStyleSheet(
+                            "background-color: #bdc3c7; color: white; border-radius: 4px;"
+                        )
+                    else:
+                        db.btn_remove.setEnabled(True)
+                        db.btn_remove.setStyleSheet(
+                            "background-color: #e74c3c; color: white; border-radius: 4px; font-weight: bold;"
+                        )
 
     def set_context(
         self, mode_type: str, name: Optional[str] = None, extra_id: Optional[str] = None
     ) -> None:
         """
         Met à jour le contexte du graphique (auto-sélection des listes déroulantes).
-
-        Args:
-            mode_type (str): Le mode à activer ('Global', 'Championnat', 'Club', 'Joueur').
-            name (str, optional): Le nom de l'entité à pré-remplir.
-            extra_id (str, optional): ID supplémentaire (ex: ID de ligue pour un club).
         """
         # 1. Définir le Mode (Club, Joueur, etc.)
         if mode_type == "Global" and name:
             mode_type = "Championnat"
 
-        index = self.combo_mode.findText(mode_type, Qt.MatchContains)
+        # Correction Enum
+        index = self.combo_mode.findText(mode_type, Qt.MatchFlag.MatchContains)
         if index >= 0:
             self.combo_mode.setCurrentIndex(index)
 
@@ -235,9 +245,11 @@ class GraphDashboard(QWidget):
     def clear_dynamic_area(self) -> None:
         """Nettoie tous les widgets de la zone dynamique."""
         for i in reversed(range(self.dynamic_layout.count())):
-            w = self.dynamic_layout.itemAt(i).widget()
-            if w:
-                w.setParent(None)
+            item = self.dynamic_layout.itemAt(i)
+            if item:
+                w = item.widget()
+                if w:
+                    w.setParent(None)
         self.current_inputs = {}
 
     def on_mode_changed(self) -> None:
@@ -289,7 +301,11 @@ class GraphDashboard(QWidget):
             l_club = QLabel("Club :")
             c_club = QComboBox()
             c_club.setEditable(True)
-            c_club.completer().setCompletionMode(QCompleter.PopupCompletion)
+            
+            # Correction Completer Mode
+            comp = c_club.completer()
+            if comp:
+                comp.setCompletionMode(QCompleter.CompletionMode.PopupCompletion)
 
             c_league.currentTextChanged.connect(
                 lambda txt: self.populate_clubs(txt, c_club)
@@ -330,12 +346,16 @@ class GraphDashboard(QWidget):
             }
 
         elif mode == "Joueur":
+            # Sécurité si df_players est None
+            player_names = list(self.dm.df_players["name"].unique()) if self.dm.df_players is not None else []
+            
             l_p = QLabel("Rechercher Joueur :")
             line_player = QLineEdit()
             line_player.setPlaceholderText("Nom du joueur...")
-            completer = QCompleter(list(self.dm.df_players["name"].unique()))
-            completer.setCaseSensitivity(Qt.CaseInsensitive)
-            completer.setFilterMode(Qt.MatchContains)
+            completer = QCompleter(player_names)
+            # Corrections Enums
+            completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+            completer.setFilterMode(Qt.MatchFlag.MatchContains)
             line_player.setCompleter(completer)
 
             l_m = QLabel("Statistiques :")
@@ -358,6 +378,9 @@ class GraphDashboard(QWidget):
     def populate_clubs(self, league_name: str, combo_club: QComboBox) -> None:
         """Remplit la liste des clubs en fonction de la ligue choisie."""
         combo_club.clear()
+        if self.dm.df_clubs is None:
+            return
+
         lid = next((k for k, v in self.dm.leagues.items() if v == league_name), None)
         if lid:
             clubs = self.dm.df_clubs[
@@ -368,8 +391,14 @@ class GraphDashboard(QWidget):
     def plot(self) -> None:
         """Génère le graphique en fonction des inputs actuels."""
         self.figure.clear()
-        ax = self.figure.add_subplot(111)
+        ax: Axes = self.figure.add_subplot(111) # type: ignore
         mode = self.combo_mode.currentText()
+
+        # Sécurité DataFrames
+        if self.dm.df_players is None or self.dm.df_clubs is None:
+             ax.text(0.5, 0.5, "Données non chargées", ha="center")
+             self.canvas.draw()
+             return
 
         # --- Dispatch vers les fonctions de dessin ---
         if mode == "Global":
@@ -379,9 +408,11 @@ class GraphDashboard(QWidget):
         elif mode == "Championnat":
             l_name = self.current_inputs["league"].currentText()
             lid = next((k for k, v in self.dm.leagues.items() if v == l_name), None)
+            
             club_ids = self.dm.df_clubs[
                 self.dm.df_clubs["domestic_competition_id"] == lid
             ]["club_id"]
+            
             df_filtered = self.dm.df_players[
                 self.dm.df_players["current_club_id"].isin(club_ids)
             ]
@@ -403,12 +434,6 @@ class GraphDashboard(QWidget):
     ) -> None:
         """
         Génère les graphiques de distribution (Global et Championnat).
-
-        Args:
-            ax (Axes): L'axe Matplotlib.
-            df (pd.DataFrame): Le DataFrame filtré contenant les données.
-            metric (str): La métrique choisie par l'utilisateur.
-            title_suffix (str): Suffixe pour le titre (ex: nom du championnat).
         """
         if df.empty:
             ax.text(0.5, 0.5, "Pas de données", ha="center")
@@ -460,7 +485,7 @@ class GraphDashboard(QWidget):
                 top_counts = top_counts.sort_values(ascending=False)
 
             # 5. Dessin du Pie Chart
-            colors = plt.cm.Pastel1.colors
+            colors = plt.cm.Pastel1.colors # type: ignore
             ax.pie(
                 top_counts,
                 labels=top_counts.index,
@@ -480,7 +505,7 @@ class GraphDashboard(QWidget):
         elif "Poste" in metric or "Pied" in metric:
             col = "position" if "Poste" in metric else "foot"
             counts = df[col].value_counts()
-            colors = plt.cm.Pastel2.colors
+            colors = plt.cm.Pastel2.colors # type: ignore
             ax.pie(
                 counts,
                 labels=counts.index,
@@ -512,6 +537,9 @@ class GraphDashboard(QWidget):
 
     def plot_club_stats(self, ax: Axes) -> None:
         """Gère l'affichage des graphiques spécifiques aux clubs."""
+        if self.dm.df_clubs is None:
+            return
+
         c_name = self.current_inputs["club"].currentText()
         metric = self.current_inputs["metric"].currentText()
         season_selected = self.current_inputs["season"].currentText()
@@ -519,7 +547,7 @@ class GraphDashboard(QWidget):
         club_row = self.dm.df_clubs[self.dm.df_clubs["name"] == c_name]
         if club_row.empty:
             return
-        cid = club_row.iloc[0]["club_id"]
+        cid = int(club_row.iloc[0]["club_id"])
 
         # --- OPTION 1 : ÉVOLUTION DU CLASSEMENT ---
         if "Classement" in metric:
@@ -547,35 +575,37 @@ class GraphDashboard(QWidget):
         # --- OPTION 2 : ÉVOLUTION DES BUTS ---
         elif "Buts" in metric:
             df_g = self.dm.df_games
-            games = df_g[
-                (df_g["home_club_id"] == cid) | (df_g["away_club_id"] == cid)
-            ]
-            stats = []
-            for s in sorted(games["season"].unique()):
-                s_games = games[games["season"] == s]
-                total_goals = sum(
-                    [
-                        g["home_club_goals"]
-                        if g["home_club_id"] == cid
-                        else g["away_club_goals"]
-                        for _, g in s_games.iterrows()
-                    ]
-                )
-                stats.append(
-                    {
-                        "Saison": f"{str(s)[2:4]}/{str(int(s) + 1)[2:4]}",
-                        "Buts": total_goals,
-                    }
-                )
-            df_stats = pd.DataFrame(stats)
-            bars = ax.bar(df_stats["Saison"], df_stats["Buts"], color=COLOR_MAIN)
-            ax.bar_label(bars, padding=3, fontweight="bold")
-            ax.set_title(
-                f"Buts marqués par saison :\n{c_name}",
-                color=COLOR_SIDEBAR,
-                fontweight="bold",
-            )
-            ax.tick_params(axis="x", rotation=45)
+            if df_g is not None:
+                games = df_g[
+                    (df_g["home_club_id"] == cid) | (df_g["away_club_id"] == cid)
+                ]
+                stats = []
+                for s in sorted(games["season"].unique()):
+                    s_games = games[games["season"] == s]
+                    total_goals = sum(
+                        [
+                            g["home_club_goals"]
+                            if g["home_club_id"] == cid
+                            else g["away_club_goals"]
+                            for _, g in s_games.iterrows()
+                        ]
+                    )
+                    stats.append(
+                        {
+                            "Saison": f"{str(s)[2:4]}/{str(int(s) + 1)[2:4]}",
+                            "Buts": total_goals,
+                        }
+                    )
+                df_stats = pd.DataFrame(stats)
+                if not df_stats.empty:
+                    bars = ax.bar(df_stats["Saison"], df_stats["Buts"], color=COLOR_MAIN)
+                    ax.bar_label(bars, padding=3, fontweight="bold")
+                    ax.set_title(
+                        f"Buts marqués par saison :\n{c_name}",
+                        color=COLOR_SIDEBAR,
+                        fontweight="bold",
+                    )
+                    ax.tick_params(axis="x", rotation=45)
 
         # --- OPTION 3 : RÉPARTITION EFFECTIF (Âge, Poste, Nat) ---
         else:
@@ -587,6 +617,9 @@ class GraphDashboard(QWidget):
         self, ax: Axes, cid: int, c_name: str, season: int, metric: str
     ) -> None:
         """Sous-fonction pour dessiner la répartition de l'effectif d'un club."""
+        if self.dm.df_appearances is None or self.dm.df_games is None or self.dm.df_players is None:
+            return
+
         apps = self.dm.df_appearances.merge(
             self.dm.df_games[["game_id", "season"]], on="game_id"
         )
@@ -609,31 +642,33 @@ class GraphDashboard(QWidget):
             diff_year = current_year - season
             squad["age_at_season"] = squad["age"] - diff_year
             ages = squad["age_at_season"].dropna().astype(int)
-            min_a, max_a = int(ages.min()), int(ages.max())
-            bins = range(min_a, max_a + 2)
-            n, bins_edges, patches = ax.hist(
-                ages, bins=bins, color=COLOR_MAIN, edgecolor="white"
-            )
-            for i in range(len(n)):
-                if n[i] > 0:
-                    ax.text(
-                        bins_edges[i] + 0.5,
-                        n[i] + 0.1,
-                        int(n[i]),
-                        ha="center",
-                        fontsize=8,
-                        fontweight="bold",
-                    )
+            if len(ages) > 0:
+                min_a, max_a = int(ages.min()), int(ages.max())
+                bins = range(min_a, max_a + 2)
+                n, bins_edges, patches = ax.hist(
+                    ages, bins=bins, color=COLOR_MAIN, edgecolor="white"
+                )
+                for i in range(len(n)):
+                    if n[i] > 0:
+                        ax.text(
+                            bins_edges[i] + 0.5,
+                            n[i] + 0.1,
+                            int(n[i]),
+                            ha="center",
+                            fontsize=8,
+                            fontweight="bold",
+                        )
             ax.set_title(
                 f"Pyramide des Âges ({season})", color=COLOR_SIDEBAR, fontweight="bold"
             )
             ax.set_xlabel("Âge")
-            ax.set_xticks(range(min_a, max_a + 1))
+            # ax.set_xticks(range(min_a, max_a + 1)) # Peut causer erreur si range vide
 
         elif "Nationalités" in metric:
             counts = squad["country_of_citizenship"].value_counts().head(8)
             counts.plot(kind="bar", ax=ax, color=COLOR_MAIN, width=0.6)
-            ax.bar_label(ax.containers[0], padding=3)
+            if len(ax.containers) > 0:
+                ax.bar_label(ax.containers[0], padding=3)
             ax.set_title(
                 f"Nationalités ({season})", color=COLOR_SIDEBAR, fontweight="bold"
             )
@@ -641,9 +676,10 @@ class GraphDashboard(QWidget):
 
         elif "Postes" in metric:
             counts = squad["position"].value_counts()
-            counts.plot(
-                kind="pie", ax=ax, autopct="%1.0f%%", colors=plt.cm.Pastel1.colors
-            )
+            if not counts.empty:
+                counts.plot(
+                    kind="pie", ax=ax, autopct="%1.0f%%", colors=plt.cm.Pastel1.colors # type: ignore
+                )
             ax.set_ylabel("")
             ax.set_title(
                 f"Répartition Postes ({season})",
@@ -653,6 +689,9 @@ class GraphDashboard(QWidget):
 
     def plot_player_stats(self, ax: Axes) -> None:
         """Génère les graphiques de statistiques individuelles des joueurs."""
+        if self.dm.df_players is None or self.dm.df_appearances is None or self.dm.df_games is None:
+            return
+
         p_name = self.current_inputs["player"].text().strip()
         metric = self.current_inputs["metric"].currentText()
 

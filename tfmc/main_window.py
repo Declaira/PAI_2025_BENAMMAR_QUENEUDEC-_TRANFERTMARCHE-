@@ -1,5 +1,5 @@
 import sys
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Any, Tuple, cast
 
 import pandas as pd
 from PyQt5.QtWidgets import (
@@ -19,9 +19,11 @@ from PyQt5.QtWidgets import (
     QStackedWidget,
     QDialog,
 )
-from PyQt5.QtCore import Qt
+# On importe Qt pour les types génériques, mais on utilisera les Enums spécifiques
+from PyQt5.QtCore import Qt 
 from PyQt5.QtGui import QIcon
 
+# Assure-toi que ces imports sont valides dans ton projet
 from tfmc.data_manager import DataManager, FilterDialog
 from tfmc.graph_dashboard import GraphDashboard
 from tfmc.config import STYLE_SHEET, BASE_DIR, AsyncImageLabel
@@ -46,7 +48,7 @@ class MainWindow(QMainWindow):
         self.dm = DataManager()
 
         # URLs des logos pour l'en-tête dynamique
-        self.league_logos = {
+        self.league_logos: Dict[str, str] = {
             "Ligue 1": "https://tmssl.akamaized.net//images/logo/header/fr1.png?lm=1732280518",
             "Premier League": "https://tmssl.akamaized.net//images/logo/header/gb1.png?lm=1521104656",
             "La Liga": "https://tmssl.akamaized.net//images/logo/header/es1.png?lm=1725974302",
@@ -57,18 +59,19 @@ class MainWindow(QMainWindow):
             "Jupiler Pro League": "https://tmssl.akamaized.net//images/logo/header/be1.png",
         }
 
-        self.icon_cache = {}
+        self.icon_cache: Dict[str, QIcon] = {}
 
-        if self.dm.df_clubs is None:
+        # Vérification stricte des DataFrames pour éviter les erreurs de type plus tard
+        if self.dm.df_clubs is None or self.dm.df_players is None:
             QMessageBox.critical(
-                self, "Erreur", "Impossible de charger les fichiers CSV."
+                self, "Erreur", "Impossible de charger les fichiers CSV (df_clubs ou df_players manquant)."
             )
             sys.exit(1)
 
         # Piles pour la navigation (Précédent / Suivant)
         self.history_stack: List[Tuple[Any, str]] = []
         self.forward_stack: List[Tuple[Any, str]] = []
-        self.is_navigating = False
+        self.is_navigating: bool = False
 
         self.init_ui()
 
@@ -76,22 +79,23 @@ class MainWindow(QMainWindow):
         """Initialise l'interface utilisateur (Layouts, Widgets, Signaux)."""
         self.resize(1280, 850)
         self.setWindowTitle("TransfertMarché")
-        self.setWindowIcon(QIcon(BASE_DIR+"/logo.png"))
+        self.setWindowIcon(QIcon(BASE_DIR + "/logo.png"))
         self.setStyleSheet(STYLE_SHEET)
 
         central = QWidget()
         self.setCentralWidget(central)
-        main_layout = QHBoxLayout(central)
+        # Typage explicite pour aider Pyright
+        main_layout: QHBoxLayout = QHBoxLayout(central)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
         # 1. SIDEBAR (Barre latérale)
         self.sidebar = QFrame()
         self.sidebar.setObjectName("sidebar")
-        side_layout = QVBoxLayout(self.sidebar)
+        side_layout: QVBoxLayout = QVBoxLayout(self.sidebar)
 
         # Navigation (Back / Forward)
-        nav_h = QHBoxLayout()
+        nav_h: QHBoxLayout = QHBoxLayout()
         self.btn_back = QPushButton("◀")
         self.btn_back.setObjectName("nav_btn")
         self.btn_back.clicked.connect(self.go_back)
@@ -102,26 +106,30 @@ class MainWindow(QMainWindow):
         nav_h.addWidget(self.btn_fwd)
         side_layout.addLayout(nav_h)
 
-        # Image contextuelle (Logo club, photo joueur...)
+        # Image contextuelle
         self.img_label = AsyncImageLabel()
         self.img_label.setFixedSize(180, 180)
         self.img_label.setScaledContents(False)
-        self.img_label.setAlignment(Qt.AlignCenter)
-        side_layout.addWidget(self.img_label, alignment=Qt.AlignCenter)
+        # Correction Enum: Qt.AlignCenter -> Qt.AlignmentFlag.AlignCenter
+        self.img_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        side_layout.addWidget(self.img_label, alignment=Qt.AlignmentFlag.AlignCenter)
 
-        # Informations contextuelles (Texte sous l'image)
+        # Informations contextuelles
         self.lbl_side_info = QLabel()
         self.lbl_side_info.setObjectName("lbl_side_info")
         self.lbl_side_info.setWordWrap(True)
-        self.lbl_side_info.setAlignment(Qt.AlignCenter)
+        self.lbl_side_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
         side_layout.addWidget(self.lbl_side_info)
 
         # Historique visuel
         side_layout.addWidget(QLabel("Historique", objectName="side_title"))
         self.list_history = QListWidget()
+        # Correction Enum: Qt.UserRole -> Qt.ItemDataRole.UserRole
         self.list_history.itemClicked.connect(
             lambda item: self.navigate_to(
-                item.data(Qt.UserRole), item.data(Qt.UserRole + 1), from_history=True
+                item.data(Qt.ItemDataRole.UserRole), 
+                item.data(Qt.ItemDataRole.UserRole + 1), 
+                from_history=True
             )
         )
         side_layout.addWidget(self.list_history)
@@ -133,7 +141,7 @@ class MainWindow(QMainWindow):
 
         # 2. ZONE PRINCIPALE (Droite)
         right_zone = QWidget()
-        right_layout = QVBoxLayout(right_zone)
+        right_layout: QVBoxLayout = QVBoxLayout(right_zone)
         right_layout.setContentsMargins(0, 0, 0, 0)
         right_layout.setSpacing(0)
 
@@ -142,44 +150,48 @@ class MainWindow(QMainWindow):
         top_bar.setObjectName("top_bar")
         top_bar.setFixedHeight(60)
 
-        top_h = QHBoxLayout(top_bar)
+        top_h: QHBoxLayout = QHBoxLayout(top_bar)
         top_h.setContentsMargins(15, 0, 15, 0)
         top_h.setSpacing(10)
 
-        # Barre de recherche avec autocomplétion
+        # Barre de recherche
         self.search_bar = QLineEdit()
         self.search_bar.setObjectName("search_bar")
         self.search_bar.setPlaceholderText("Rechercher club, joueur, ligue...")
         self.search_bar.setFixedWidth(400)
 
-        all_names = (
-            list(self.dm.leagues.values())
-            + list(self.dm.df_clubs["name"].dropna().unique())
-            + list(self.dm.df_players["name"].dropna().unique())
-        )
+        # Construction sécurisée de la liste de complétion
+        # On utilise 'or []' pour garantir qu'on itère sur des listes même si un élément est None
+        leagues_list = list(self.dm.leagues.values())
+        clubs_list = list(self.dm.df_clubs["name"].dropna().unique()) if self.dm.df_clubs is not None else []
+        players_list = list(self.dm.df_players["name"].dropna().unique()) if self.dm.df_players is not None else []
+        
+        all_names = leagues_list + clubs_list + players_list
+
         self.completer = QCompleter(all_names, self.search_bar)
-        self.completer.setCaseSensitivity(Qt.CaseInsensitive)
-        self.completer.setFilterMode(Qt.MatchContains)
+        self.completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        self.completer.setFilterMode(Qt.MatchFlag.MatchContains)
         self.completer.setMaxVisibleItems(15)
-        self.completer.activated.connect(self.on_suggestion_selected)
+        # Note: activated[str] est le signal surchargé pour renvoyer le texte
+        self.completer.activated[str].connect(self.on_suggestion_selected) # type: ignore
         self.search_bar.returnPressed.connect(self.on_suggestion_selected)
         self.search_bar.setCompleter(self.completer)
 
         self.btn_search_icon = QPushButton("🔍")
         self.btn_search_icon.setObjectName("search_btn")
         self.btn_search_icon.setFixedSize(35, 35)
-        self.btn_search_icon.setCursor(Qt.PointingHandCursor)
+        self.btn_search_icon.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_search_icon.clicked.connect(self.on_search_valid)
 
         self.btn_filter = QPushButton("Filtres ⚙")
         self.btn_filter.setObjectName("action_btn")
-        self.btn_filter.setCursor(Qt.PointingHandCursor)
+        self.btn_filter.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_filter.clicked.connect(self.open_filter_dialog)
 
         # --- BOUTON GRAPH ---
         self.btn_graph = QPushButton("Stats 📊")
         self.btn_graph.setObjectName("action_btn")
-        self.btn_graph.setCursor(Qt.PointingHandCursor)
+        self.btn_graph.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_graph.setCheckable(True)
         self.btn_graph.clicked.connect(self.toggle_graph_panel)
 
@@ -192,8 +204,8 @@ class MainWindow(QMainWindow):
         right_layout.addWidget(top_bar)
 
         # --- STRUCTURE SPLITTER (Contenu | Graphiques) ---
-        self.splitter = QSplitter(Qt.Horizontal)
-        self.saved_splitter_sizes = []
+        self.splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.saved_splitter_sizes: List[int] = []
 
         # 1. Le contenu principal (Pages empilées)
         self.stack = QStackedWidget()
@@ -276,6 +288,9 @@ class MainWindow(QMainWindow):
         Applique le contexte de la page actuelle (Joueur, Club, Ligue)
         au widget GraphDashboard spécifié.
         """
+        if self.dm.df_players is None or self.dm.df_clubs is None:
+            return
+
         current_page = self.stack.currentWidget()
         try:
             # CAS JOUEUR
@@ -284,7 +299,7 @@ class MainWindow(QMainWindow):
                 p_rows = self.dm.df_players[self.dm.df_players["player_id"] == p_id]
                 if not p_rows.empty:
                     p_name = p_rows["name"].values[0]
-                    graph_widget.set_context("Joueur", p_name)
+                    graph_widget.set_context("Joueur", str(p_name))
 
             # CAS CLUB
             elif isinstance(current_page, ClubPage) and hasattr(current_page, "cid"):
@@ -293,14 +308,14 @@ class MainWindow(QMainWindow):
                 if not c_rows.empty:
                     row = c_rows.iloc[0]
                     graph_widget.set_context(
-                        "Club", row["name"], row["domestic_competition_id"]
+                        "Club", str(row["name"]), str(row["domestic_competition_id"])
                     )
 
             # CAS CHAMPIONNAT
             elif isinstance(current_page, LeaguePage) and hasattr(current_page, "lid"):
                 l_id = current_page.lid
                 l_name = self.dm.leagues.get(l_id, "")
-                graph_widget.set_context("Global", l_name)
+                graph_widget.set_context("Global", str(l_name))
 
             else:
                 graph_widget.set_context("Global")
@@ -323,6 +338,10 @@ class MainWindow(QMainWindow):
         """Gère la sélection dans la barre de recherche (Ligue, Club ou Joueur)."""
         search_text = text if text else self.search_bar.text().strip()
         if not search_text:
+            return
+        
+        # Vérification de sécurité pour les DataFrames
+        if self.dm.df_clubs is None or self.dm.df_players is None:
             return
 
         # 1. Est-ce une ligue ?
@@ -392,6 +411,13 @@ class MainWindow(QMainWindow):
             from_history (bool): Indique si la navigation provient d'un clic sur l'historique.
         """
         self.search_bar.clearFocus()
+        
+        # Sécurité pour DataFrames
+        if self.dm.df_clubs is None or self.dm.df_players is None:
+             # Si les données ne sont pas chargées, on ne peut pas naviguer correctement
+             # sauf peut-être vers Home
+             if type_hint != "home":
+                 return
 
         if not type_hint:
             if data_id == "home":
@@ -406,31 +432,35 @@ class MainWindow(QMainWindow):
                 self.forward_stack.clear()
 
                 display_text = str(data_id)
+                # Utilisation de cast pour aider Pyright si les DFs sont Optionals
+                df_clubs = cast(pd.DataFrame, self.dm.df_clubs)
+                df_players = cast(pd.DataFrame, self.dm.df_players)
+
                 if type_hint == "club":
                     try:
-                        display_text = self.dm.df_clubs[
-                            self.dm.df_clubs["club_id"] == data_id
+                        display_text = df_clubs[
+                            df_clubs["club_id"] == data_id
                         ]["name"].values[0]
                     except Exception:
                         pass
                 elif type_hint == "joueur":
                     try:
-                        display_text = self.dm.df_players[
-                            self.dm.df_players["player_id"] == data_id
+                        display_text = df_players[
+                            df_players["player_id"] == data_id
                         ]["name"].values[0]
                     except Exception:
                         pass
                 elif type_hint == "championnat":
-                    display_text = self.dm.leagues.get(data_id, data_id)
+                    display_text = self.dm.leagues.get(data_id, str(data_id))
                 elif type_hint == "home":
                     display_text = "Accueil"
                 elif type_hint == "suggestion":
                     if isinstance(data_id, dict):
                         display_text = data_id.get("nom", "Filtre")
 
-                item = QListWidgetItem(display_text)
-                item.setData(Qt.UserRole, data_id)
-                item.setData(Qt.UserRole + 1, type_hint)
+                item = QListWidgetItem(str(display_text))
+                item.setData(Qt.ItemDataRole.UserRole, data_id)
+                item.setData(Qt.ItemDataRole.UserRole + 1, type_hint)
                 self.list_history.addItem(item)
                 self.list_history.scrollToBottom()
 
@@ -439,7 +469,7 @@ class MainWindow(QMainWindow):
         try:
             if type_hint == "home":
                 self.stack.setCurrentIndex(0)
-                self.img_label.set_image_from_path(BASE_DIR+"/logo.png")
+                self.img_label.set_image_from_path(BASE_DIR + "/logo.png")
                 if self.img_label.pixmap() is None:
                     self.img_label.setText("🏠")
                 self.lbl_side_info.setText(
@@ -449,6 +479,7 @@ class MainWindow(QMainWindow):
             elif type_hint == "championnat":
                 cups_ids = ["CL", "EL", "CDR", "FAC", "DFB", "CIT", "NLP", "GRP"]
                 league_name = self.dm.leagues.get(data_id, str(data_id))
+                
                 logo_url = (
                     f"https://tmssl.akamaized.net//images/logo/header/{str(data_id).lower()}.png?lm=1"
                 )
@@ -468,11 +499,12 @@ class MainWindow(QMainWindow):
                     )
 
             elif type_hint == "club":
+                df_clubs = cast(pd.DataFrame, self.dm.df_clubs)
                 self.stack.setCurrentIndex(2)
                 self.page_club.load(data_id)
                 try:
-                    row = self.dm.df_clubs[
-                        self.dm.df_clubs["club_id"] == data_id
+                    row = df_clubs[
+                        df_clubs["club_id"] == data_id
                     ].iloc[0]
                     logo_url = f"https://tmssl.akamaized.net//images/wappen/head/{int(data_id)}.png"
                     self.img_label.set_image_from_url(logo_url)
@@ -486,13 +518,14 @@ class MainWindow(QMainWindow):
                     self.lbl_side_info.setText(f"Club ID: {data_id}")
 
             elif type_hint == "joueur":
+                df_players = cast(pd.DataFrame, self.dm.df_players)
                 self.stack.setCurrentIndex(3)
                 self.page_player.load(data_id)
                 try:
-                    row = self.dm.df_players[
-                        self.dm.df_players["player_id"] == data_id
+                    row = df_players[
+                        df_players["player_id"] == data_id
                     ].iloc[0]
-                    self.img_label.set_image_from_url(row.get("image_url"))
+                    self.img_label.set_image_from_url(str(row.get("image_url")))
                     age_display = (
                         f"{int(row['age'])} ans" if pd.notna(row.get("age")) else "-"
                     )
@@ -502,16 +535,18 @@ class MainWindow(QMainWindow):
                         else "-"
                     )
                     nat = row.get("country_of_citizenship", "-")
-                    valeur = (
-                        f"{row['market_value_in_eur'] / 1e6:.1f} M€"
-                        if pd.notna(row.get("market_value_in_eur"))
-                        else "-"
-                    )
+                    
+                    valeur_str = "-"
+                    if pd.notna(row.get("market_value_in_eur")):
+                        valeur_float = float(row['market_value_in_eur'])
+                        valeur_str = f"{valeur_float / 1e6:.1f} M€"
+
                     self.lbl_side_info.setText(
                         f"<b>{row['name']}</b><br><br>"
                         f"Âge : {age_display}<br>"
                         f"Taille : {taille}<br>"
                         f"Nationalité : {nat}<br>"
+                        f"Valeur : {valeur_str}"
                     )
                 except Exception:
                     self.img_label.setText("👤")
@@ -558,8 +593,12 @@ class MainWindow(QMainWindow):
         if len(self.history_stack) > 1:
             current = self.history_stack.pop()
             self.forward_stack.append(current)
-            prev_data, prev_type = self.history_stack[-1]
-            self.navigate_to(prev_data, prev_type, from_history=True)
+            # prev_data, prev_type = self.history_stack[-1]
+            # Utilisation de l'index sécurisé
+            if self.history_stack:
+                prev_data = self.history_stack[-1][0]
+                prev_type = self.history_stack[-1][1]
+                self.navigate_to(prev_data, prev_type, from_history=True)
 
     def go_forward(self) -> None:
         """Navigue vers la page suivante dans l'historique."""

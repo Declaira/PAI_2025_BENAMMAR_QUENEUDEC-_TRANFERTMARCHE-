@@ -1,6 +1,5 @@
 import os
 from typing import Dict, Union
-
 import pandas as pd
 import requests
 from PyQt5.QtCore import Qt
@@ -256,7 +255,6 @@ POSITIONS_FR: Dict[str, str] = {
     "Second Striker": "Deuxième Attaquant",
 }
 
-
 class AsyncImageLabel(QLabel):
     """
     Extension de QLabel permettant de charger des images de manière asynchrone
@@ -276,6 +274,8 @@ class AsyncImageLabel(QLabel):
             return
 
         try:
+            # Note: Pour une vraie application asynchrone sans bloquer l'UI,
+            # il faudrait normalement utiliser un QThread ou QNetworkAccessManager.
             r = requests.get(str(url), timeout=1.5)
             if r.status_code == 200:
                 img = QImage()
@@ -284,7 +284,9 @@ class AsyncImageLabel(QLabel):
                 if not pixmap.isNull():
                     self.setPixmap(
                         pixmap.scaled(
-                            self.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation
+                            self.size(), 
+                            Qt.AspectRatioMode.KeepAspectRatio, 
+                            Qt.TransformationMode.SmoothTransformation
                         )
                     )
                 else:
@@ -301,7 +303,8 @@ class AsyncImageLabel(QLabel):
         Args:
             file_path: Le chemin absolu vers le fichier image.
         """
-        self.setAlignment(Qt.AlignCenter)
+        # Correction Enum Alignment
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         # 1. Vérifier si le chemin est vide ou invalide (NaN)
         if not file_path or (pd.isna(file_path)):
@@ -313,8 +316,11 @@ class AsyncImageLabel(QLabel):
 
         # 3. Vérifier si le chargement a réussi
         if not pixmap.isNull():
+            # Correction Enums AspectRatio et Transformation
             scaled_pixmap = pixmap.scaled(
-                self.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation
+                self.size(), 
+                Qt.AspectRatioMode.KeepAspectRatio, 
+                Qt.TransformationMode.SmoothTransformation
             )
             self.setPixmap(scaled_pixmap)
         else:

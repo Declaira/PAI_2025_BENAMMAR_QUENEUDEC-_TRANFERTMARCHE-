@@ -44,7 +44,7 @@ uvx pyright tfmc --pythonpath .venv/bin/python
 
 ```bash
 uv sync --group docs
-cd docs && uv run make html
+cd docs && uv run ./make.bat html
 ```
 
 #### How to run autobuild for docs

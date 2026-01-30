@@ -6,6 +6,7 @@ Welcome to Transfertmarche documentation!
    :maxdepth: 2
    :caption: Contents:
 
+   modules
    tfmc
    notebooks
    readme

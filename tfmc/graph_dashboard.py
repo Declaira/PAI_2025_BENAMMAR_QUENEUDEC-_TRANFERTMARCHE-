@@ -202,12 +202,16 @@ class GraphDashboard(QWidget):
     ) -> None:
         """
         Met à jour le contexte du graphique (auto-sélection des listes déroulantes).
+
+        Args:
+            mode_type (str): Le mode à activer ('Global', 'Championnat', 'Club', 'Joueur').
+            name (str, optional): Le nom de l'entité à pré-remplir.
+            extra_id (str, optional): ID supplémentaire (ex: ID de ligue pour un club).
         """
         # 1. Définir le Mode (Club, Joueur, etc.)
         if mode_type == "Global" and name:
             mode_type = "Championnat"
 
-        # Correction Enum
         index = self.combo_mode.findText(mode_type, Qt.MatchFlag.MatchContains)
         if index >= 0:
             self.combo_mode.setCurrentIndex(index)
@@ -226,7 +230,6 @@ class GraphDashboard(QWidget):
                 else:
                     combo_club.setEditText(name)
 
-                # B. Sélectionner automatiquement la Ligue associée
                 if extra_id and "league" in self.current_inputs:
                     league_name = self.dm.leagues.get(extra_id)
                     if league_name:

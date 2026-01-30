@@ -42,7 +42,7 @@ def mock_data_manager():
     Crée une instance de DataManager avec des données simulées (mock).
     On empêche le chargement réel des fichiers CSV/Kaggle via patch.
     """
-    with patch("data_manager.DataManager.load_data") as mock_load:
+    with patch("DataManager.load_data") as mock_load:
         # On initialise le manager (le load_data réel est sauté)
         dm = DataManager()
         

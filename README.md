@@ -1,4 +1,7 @@
-## Transfertmarche
+## Transfertmarché
+
+L’objectif du projet est de proposer un logiciel de bureau capable d’extraire des statistiques et d’afficher des graphiques montrant des informations relatives au monde du football. Il peut s’agir de statistiques concernant la carrière d’un joueur (nombre de matchs, buts), ou des classements des clubs à partir de la saison 2002/2003. 
+
 
 This project was started with [supopo-pai-cookiecutter-template](https://github.com/ClementPinard/supop-pai-cookiecuttter-template/tree/main)
 
